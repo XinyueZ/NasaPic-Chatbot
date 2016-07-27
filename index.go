@@ -3,7 +3,7 @@ package index
 import (
 	"appengine"
 	"net/http"
- 
+
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	ERR = "Sick, sorry I have some internal problems. :(. Try again or later."
 	//Buttons
 	BTN_PAYLOAD_YES = "Yes, show something."
 	BTN_PAYLOAD_NO  = "No, thanks"
@@ -87,7 +88,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 			response, err := msgBot.Client.Post("http://nasa-photo-dev4.appspot.com/last_three_list", "application/json", bytes.NewBufferString(reqBody))
 
 			if err != nil {
-				msgBot.Send(user, NewMessage("Sick, sorry I have some internal problems. :("), NotificationTypeRegular)
+				msgBot.Send(user, NewMessage(ERR), NotificationTypeRegular)
 				cxt.Errorf(fmt.Sprintf("%v", err))
 				hasErrorCh <- true
 				return
@@ -100,7 +101,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 			body, err := ioutil.ReadAll(response.Body)
 
 			if err != nil {
-				msgBot.Send(user, NewMessage("Sick, sorry I have some internal problems. :("), NotificationTypeRegular)
+				msgBot.Send(user, NewMessage(ERR), NotificationTypeRegular)
 				cxt.Errorf(fmt.Sprintf("%v", err))
 				hasErrorCh <- true
 				return
@@ -114,6 +115,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 					msgBot.Send(user, NewImageMessage(res.Urls.HD), NotificationTypeRegular)
 				}
 			} else {
+				msgBot.Send(user, NewMessage(ERR), NotificationTypeRegular)
 				cxt.Errorf(fmt.Sprintf("Status: %v", response.StatusCode))
 			}
 		}
