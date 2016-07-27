@@ -3,12 +3,11 @@ package index
 import (
 	"appengine"
 	"net/http"
-
-	"appengine/urlfetch"
+ 
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil" 
+	"io/ioutil"
 )
 
 const (
@@ -85,7 +84,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		case PAYLOAD_YES:
 			//Get last three day's photos from NASA
 			reqBody := fmt.Sprintf(`{"reqId":"%s","timeZone":"CET"}`, NewV4().String())
-			response, err := urlfetch.Client(cxt).Post("http://nasa-photo-dev4.appspot.com/last_three_list", "application/json", bytes.NewBufferString(reqBody))
+			response, err := msgBot.Client.Post("http://nasa-photo-dev4.appspot.com/last_three_list", "application/json", bytes.NewBufferString(reqBody))
 
 			if err != nil {
 				msgBot.Send(user, NewMessage("Sick, sorry I have some internal problems. :("), NotificationTypeRegular)
