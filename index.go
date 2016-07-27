@@ -11,7 +11,9 @@ import (
 )
 
 const (
-	ERR = "Sick, sorry I have some internal problems. :(. Try again or later."
+	API_INDEX_START = 2
+	API_INDEX_END   = 6
+	ERR             = "Sick, sorry I have some internal problems. :(. Try again or later."
 	//Buttons
 	BTN_PAYLOAD_YES = "Yes, show something."
 	BTN_PAYLOAD_NO  = "No, thanks"
@@ -39,11 +41,6 @@ type Photo struct {
 type Urls struct {
 	Normal string `json:"normal"`
 	HD     string `json:"hd"`
-}
-
-type LastThreeRequest struct {
-	ReqId    string `json:"reqId"`
-	TimeZone string `json:"timeZone"`
 }
 
 func init() {
@@ -82,45 +79,53 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		switch pb.Payload {
 		case PAYLOAD_NO:
 			msgBot.Send(user, NewMessage("Sad! But still happy to see you here. :) "), NotificationTypeRegular)
+			hasErrorCh <- false
 		case PAYLOAD_YES:
-			//Get last three day's photos from NASA
-			reqBody := fmt.Sprintf(`{"reqId":"%s","timeZone":"CET"}`, NewV4().String())
-			response, err := msgBot.Client.Post("http://nasa-photo-dev4.appspot.com/last_three_list", "application/json", bytes.NewBufferString(reqBody))
-
-			if err != nil {
-				msgBot.Send(user, NewMessage(ERR), NotificationTypeRegular)
-				cxt.Errorf(fmt.Sprintf("%v", err))
-				hasErrorCh <- true
-				return
-			}
-
-			if response != nil {
-				defer response.Body.Close()
-			}
-
-			body, err := ioutil.ReadAll(response.Body)
-
-			if err != nil {
-				msgBot.Send(user, NewMessage(ERR), NotificationTypeRegular)
-				cxt.Errorf(fmt.Sprintf("%v", err))
-				hasErrorCh <- true
-				return
-			}
-			if response.StatusCode == http.StatusOK {
-				photos := Photos{}
-				json.Unmarshal(body, &photos)
-
-				for _, res := range photos.Result {
-					msgBot.Send(user, NewMessage(fmt.Sprintf("Photo of %s", res.Date)), NotificationTypeRegular)
-					msgBot.Send(user, NewImageMessage(res.Urls.HD), NotificationTypeRegular)
+			for i := API_INDEX_START; i <= API_INDEX_END; i++ {
+				success, photos := getPhotos(cxt, msgBot.Client, i)
+				if success {
+					for _, res := range photos.Result {
+						msgBot.Send(user, NewMessage(fmt.Sprintf("Photo of %s", res.Date)), NotificationTypeRegular)
+						msgBot.Send(user, NewImageMessage(res.Urls.HD), NotificationTypeRegular)
+					}
+					hasErrorCh <- false
+					return
 				}
-			} else {
-				msgBot.Send(user, NewMessage(ERR), NotificationTypeRegular)
-				cxt.Errorf(fmt.Sprintf("Status: %v", response.StatusCode))
 			}
+			//Some error happened before, otherwise you can't arrive here.
+			msgBot.Send(user, NewMessage(ERR), NotificationTypeRegular)
+			hasErrorCh <- true
 		}
-		hasErrorCh <- false
 	}
-
 	msgBot.Handler(w, r)
+}
+
+func getPhotos(cxt appengine.Context, httpClient *http.Client, apiIndex int) (success bool, photos *Photos) {
+	response, err := httpClient.Post(fmt.Sprintf("http://nasa-photo-dev%d.appspot.com/last_three_list", apiIndex), "application/json", bytes.NewBufferString(fmt.Sprintf(`{"reqId":"%s","timeZone":"CET"}`, NewV4().String())))
+	if err != nil {
+		success = false
+		photos = nil
+		cxt.Errorf(fmt.Sprintf("Error: %v", err))
+		return
+	}
+	if response != nil {
+		defer response.Body.Close()
+	}
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		success = false
+		photos = nil
+		cxt.Errorf(fmt.Sprintf("Error: %v", err))
+		return
+	}
+	if response.StatusCode == http.StatusOK {
+		success = true
+		photos = &Photos{}
+		json.Unmarshal(body, photos)
+	} else {
+		success = false
+		photos = nil
+		cxt.Errorf(fmt.Sprintf("Status: %v", response.StatusCode))
+	}
+	return
 }
