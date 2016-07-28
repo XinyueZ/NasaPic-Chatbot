@@ -157,32 +157,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 func get3DaysPhotos(cxt appengine.Context, httpClient *http.Client, apiIndex int) (success bool, photos *Photos) {
 	response, err := httpClient.Post(fmt.Sprintf("http://nasa-photo-dev%d.appspot.com/last_three_list", apiIndex), "application/json", bytes.NewBufferString(fmt.Sprintf(`{"reqId":"%s","timeZone":"CET"}`, NewV4().String())))
-	if err != nil {
-		success = false
-		photos = nil
-		cxt.Errorf(fmt.Sprintf("Error: %v", err))
-		return
-	}
-	if response != nil {
-		defer response.Body.Close()
-	}
-	body, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		success = false
-		photos = nil
-		cxt.Errorf(fmt.Sprintf("Error: %v", err))
-		return
-	}
-	if response.StatusCode == http.StatusOK {
-		success = true
-		photos = &Photos{}
-		json.Unmarshal(body, photos)
-	} else {
-		success = false
-		photos = nil
-		cxt.Errorf(fmt.Sprintf("Status: %v", response.StatusCode))
-	}
-	return
+	return getPhotos(cxt, response, err)
 }
 
 func getMonthPhotos(cxt appengine.Context, httpClient *http.Client, apiIndex int) (success bool, photos *Photos) {
@@ -191,6 +166,10 @@ func getMonthPhotos(cxt appengine.Context, httpClient *http.Client, apiIndex int
 	month := int(now.Month())
 
 	response, err := httpClient.Post(fmt.Sprintf("http://nasa-photo-dev%d.appspot.com/month_list", apiIndex), "application/json", bytes.NewBufferString(fmt.Sprintf(`{"reqId":"%s","year":%d, "month" : %d, "timeZone":"CET"}`, NewV4().String(), year, month)))
+	return getPhotos(cxt, response, err)
+}
+
+func getPhotos(cxt appengine.Context, response *http.Response, err error) (success bool, photos *Photos) {
 	if err != nil {
 		success = false
 		photos = nil
