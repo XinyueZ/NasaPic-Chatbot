@@ -12,6 +12,8 @@ import (
 )
 
 const (
+	MONTH_PHOTOS_LIMIT = 5
+
 	DEFAULT_PHOTO = "http://awards.fab10.org/assets/default-placeholder-3098792c74933699bd99309cb13f677e.png"
 	VIDEO_ICON    = "http://www.rockymountainrep.com/wp-content/themes/rockymountainrep/library/images/youtube-default.png"
 
@@ -95,12 +97,15 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 			for i := API_INDEX_START; i <= API_INDEX_END; i++ {
 				success, photos := get3DaysPhotos(cxt, msgBot.Client, i)
 				if success {
+					temp := NewGenericTemplate()
 					for _, res := range photos.Result {
-						imgUrl := readUrl(&res)
-						msgBot.Send(user, NewMessage(fmt.Sprintf("Photo of %s", res.Date)), NotificationTypeRegular)
-						msgBot.Send(user, NewImageMessage(imgUrl), NotificationTypeRegular)
+						addToTemplate(cxt, &temp, &res)
 					}
+					//Send template
+					cxt.Infof(fmt.Sprintf("Send:%v", temp))
+					msgBot.Send(user, temp, NotificationTypeRegular)
 					msgBot.Send(user, NewMessage(DONE), NotificationTypeRegular)
+
 					//Asking for getting photos of this month.
 					now := time.Now()
 					year := now.Year()
@@ -125,27 +130,29 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 			for i := API_INDEX_START; i <= API_INDEX_END; i++ {
 				success, photos := getMonthPhotos(cxt, msgBot.Client, i)
 				if success {
-					var pMsg *GenericTemplate
-					i := 0
-					for _, res := range photos.Result {
-						if i%5 == 0 { //Every 5 box to show.
-							if pMsg != nil {
-								cxt.Infof(fmt.Sprintf("Send:%v", pMsg))
-								msgBot.Send(user, *pMsg, NotificationTypeRegular)
+					if len(photos.Result) <= MONTH_PHOTOS_LIMIT {
+						msg := NewGenericTemplate()
+						for _, res := range photos.Result {
+							addToTemplate(cxt, &msg, &res)
+						}
+						//Send template
+						cxt.Infof(fmt.Sprintf("Send:%v", msg))
+						msgBot.Send(user, msg, NotificationTypeRegular)
+					} else {
+						i := 0
+						var pMsg *GenericTemplate = nil
+						for _, res := range photos.Result {
+							if i%MONTH_PHOTOS_LIMIT == 0 { //Every 5 box to show.
+								if pMsg != nil { //Send template
+									cxt.Infof(fmt.Sprintf("Send:%v", pMsg))
+									msgBot.Send(user, *pMsg, NotificationTypeRegular)
+								}
+								msg := NewGenericTemplate()
+								pMsg = &msg
 							}
-							msg := NewGenericTemplate()
-							pMsg = &msg
+							addToTemplate(cxt, pMsg, &res)
+							i++
 						}
-						imgUrl := readUrl(&res)
-						element := Element{
-							Title:    res.Title,
-							Url:      imgUrl,
-							ImageUrl: imgUrl,
-							Subtitle: res.Date,
-						}
-						pMsg.AddElement(element)
-						cxt.Infof(fmt.Sprintf("Add:%v", element))
-						i++
 					}
 					msgBot.Send(user, NewMessage(DONE), NotificationTypeRegular)
 					hasErrorCh <- false
@@ -203,7 +210,7 @@ func getPhotos(cxt appengine.Context, response *http.Response, err error) (succe
 	return
 }
 
-func readUrl(photo *Photo) (url string) {
+func readImageUrl(photo *Photo) (url string) {
 	if photo == nil {
 		url = DEFAULT_PHOTO
 		return
@@ -226,4 +233,37 @@ func readUrl(photo *Photo) (url string) {
 
 	url = DEFAULT_PHOTO
 	return
+}
+
+func readUrl(photo *Photo) (url string) {
+	if photo == nil {
+		url = DEFAULT_PHOTO
+		return
+	}
+
+	if photo.Urls.HD != "" {
+		url = photo.Urls.HD
+		return
+	}
+
+	if photo.Urls.Normal != "" {
+		url = photo.Urls.Normal
+		return
+	}
+
+	url = DEFAULT_PHOTO
+	return
+}
+
+func addToTemplate(cxt appengine.Context, pMsg *GenericTemplate, photo *Photo) {
+	imgUrl := readImageUrl(photo)
+	url := readUrl(photo)
+	element := Element{
+		Title:    photo.Title,
+		Url:      url,
+		ImageUrl: imgUrl,
+		Subtitle: photo.Date,
+	}
+	pMsg.AddElement(element)
+	cxt.Infof(fmt.Sprintf("Add:%v", element))
 }
