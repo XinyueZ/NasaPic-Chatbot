@@ -12,6 +12,9 @@ import (
 )
 
 const (
+	DEFAULT_PHOTO = "http://awards.fab10.org/assets/default-placeholder-3098792c74933699bd99309cb13f677e.png"
+	VIDEO_ICON    = "http://www.rockymountainrep.com/wp-content/themes/rockymountainrep/library/images/youtube-default.png"
+
 	API_INDEX_START = 2
 	API_INDEX_END   = 6
 	ERR             = "Sick, sorry I have some internal problems. :(. Try again or later."
@@ -93,8 +96,9 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 				success, photos := get3DaysPhotos(cxt, msgBot.Client, i)
 				if success {
 					for _, res := range photos.Result {
+						imgUrl := readUrl(&res)
 						msgBot.Send(user, NewMessage(fmt.Sprintf("Photo of %s", res.Date)), NotificationTypeRegular)
-						msgBot.Send(user, NewImageMessage(res.Urls.HD), NotificationTypeRegular)
+						msgBot.Send(user, NewImageMessage(imgUrl), NotificationTypeRegular)
 					}
 					msgBot.Send(user, NewMessage(DONE), NotificationTypeRegular)
 					//Asking for getting photos of this month.
@@ -132,10 +136,11 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 							msg := NewGenericTemplate()
 							pMsg = &msg
 						}
+						imgUrl := readUrl(&res)
 						element := Element{
 							Title:    res.Title,
-							Url:      res.Urls.HD,
-							ImageUrl: res.Urls.HD,
+							Url:      imgUrl,
+							ImageUrl: imgUrl,
 							Subtitle: res.Date,
 						}
 						pMsg.AddElement(element)
@@ -195,5 +200,30 @@ func getPhotos(cxt appengine.Context, response *http.Response, err error) (succe
 		photos = nil
 		cxt.Errorf(fmt.Sprintf("Status: %v", response.StatusCode))
 	}
+	return
+}
+
+func readUrl(photo *Photo) (url string) {
+	if photo == nil {
+		url = DEFAULT_PHOTO
+		return
+	}
+
+	if photo.Type != "image" {
+		url = VIDEO_ICON
+		return
+	}
+
+	if photo.Urls.HD != "" {
+		url = photo.Urls.HD
+		return
+	}
+
+	if photo.Urls.Normal != "" {
+		url = photo.Urls.Normal
+		return
+	}
+
+	url = DEFAULT_PHOTO
 	return
 }
